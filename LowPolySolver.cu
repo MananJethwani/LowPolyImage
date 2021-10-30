@@ -19,8 +19,6 @@ int main(int argc, char **argv)
 {
     simpleTimer t_whole("whole process");
 
-    // init_cuda();
-
     string image_path = argv[1];
     string output_folder = argv[2];
     cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
@@ -57,18 +55,6 @@ int main(int argc, char **argv)
 
     t_edge.GetDuration();
 
-    // ****************************
-    // for output edge image
-    // cv::Mat edge_output = drawEdges(gradient_img, height, width);
-    // cv::imwrite( output_folder + "/GPU_edge.jpg", edge_output );
-    // ****************************
-
-    // ****************************
-    // for output vertices image
-    // cv::Mat vertices_output = drawVert(vert_img, height, width);
-    // cv::imwrite( output_folder + "/GPU_vertex.jpg", vertices_output );
-    // ****************************
-
     simpleTimer t_delauney("Delauney Triangulation");
 
     Point *owner_map_CPU = (Point *)malloc(sizeof(Point) * totalPixel);
@@ -77,25 +63,10 @@ int main(int argc, char **argv)
 
     t_delauney.GetDuration();
 
-    // ****************************
-    // for output voroni images
-    // cv::Mat voroni_output = drawVoroni(owner_map_CPU, height, width);
-    // cv::imwrite( output_folder + "/GPU_voroni.jpg", voroni_output );
-    // // for output voroni + triangle images
-    // cv::Mat voroni_tri_output = drawTriangles(triangles, voroni_output, true);
-    // cv::imwrite( output_folder + "/GPU_voroni_triangle.jpg", voroni_tri_output );
-    // // for output triangle on original images
-    // cv::Mat orig_tri_output = drawTriangles(triangles, img, true);
-    // cv::imwrite( output_folder + "/GPU_original_triangle.jpg", orig_tri_output );
-    // ****************************
-
     simpleTimer t_color("Coloring Image");
 
-    // ****************************
-    // for output final image
     cv::Mat final_output = drawLowPoly_GPU(img);
     cv::imwrite( output_folder + "/GPU_final.jpg", final_output );
-    // ****************************
 
     t_color.GetDuration();
 

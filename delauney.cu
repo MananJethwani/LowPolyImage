@@ -73,7 +73,7 @@ void get_gradient_kernel(uint8_t *grey_img, uint8_t *gradient_img, int height, i
     };
 
     if (y >= 0 && y < height && x >= 0 && x < width) {
-        float grad[2] = {0.0, 0.0};   // grad-x and grad-y
+        float grad[2] = {0.0, 0.0};
 
         for (int i = 0; i < MASK_N; ++i) {
             grad[i] = 0.0;
@@ -93,19 +93,13 @@ void get_gradient_kernel(uint8_t *grey_img, uint8_t *gradient_img, int height, i
     }
 }
 
-
-// Random number generator for CUDA
-// Reference: https://docs.nvidia.com/cuda/curand/device-api-overview.html#device-api-example
 __global__
 void setup_kernel(curandState *state)
 {
     int id = threadIdx.x + blockIdx.x * blockDim.x;
-    /* Each thread gets same seed, a different sequence
-       number, no offset */
-    /* faster version here, reference: https://forums.developer.nvidia.com/t/curand-initialization-time/19758/2 */
+
     curand_init( (SEED << 20) + id, 0, 0, &state[id]);
-    /* random generation setup would be slow in this way */
-    // curand_init(SEED, id, 0, &state[id]);
+
 }
 
 
@@ -119,11 +113,9 @@ void select_vertices_kernel(uint8_t *grad, Point *owner_map, curandState *rand_s
 
     uint8_t gradVal;
 
-    // out of bounds
     if (y < 0 || y >= height || x < 0 || x >= width)
         return;
 
-    // four corners must be in the set
     if ((y == 0 || y == height-1) && (x == 0 || x == width-1))
     {
         Point p;
@@ -135,8 +127,6 @@ void select_vertices_kernel(uint8_t *grad, Point *owner_map, curandState *rand_s
     {
         curandState localState = rand_state[id];
         float randNum = curand_uniform(&localState);
-
-        // printf("%f\n", randNum);
 
         // inner area
         if (y > 0 && y < height-1 && x > 0 && x < width-1)
@@ -216,16 +206,9 @@ void select_vertices_GPU(uint8_t *grey_img_CPU, uint8_t *result_image, Point *ve
 
     t_select_vert.GetDuration();
 
-    // ********************************
-    // for testing output result
-    // checkCuda( cudaMemcpy(result_image, gradient_img_GPU, total_pixels * sizeof(uint8_t), cudaMemcpyDeviceToHost) );
-    // checkCuda( cudaMemcpy(vert_img, owner_map_GPU, total_pixels * sizeof(Point), cudaMemcpyDeviceToHost) );
-    // ********************************
 }
 
 
-// Get the ceiling of the value which is power of 2
-// Reference: https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
 int ceil_power2(int v)
 {
     v--;
@@ -404,11 +387,6 @@ void delauney_GPU(Point *owner_map_CPU, vector<Triangle> &triangles_list, int he
 
     simpleTimer t_jump_flood("...Jump flooding");
 
-    // **************************************
-    // Jump-Flooding algorithm for constructing voronoi diagram
-    // Reference: https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.101.8568&rep=rep1&type=pdf
-    // **************************************
-
     int init_step_size = ceil_power2(min(height, width)) / 2;
     // Iterate possible step sizes
     for (int step_size = init_step_size; step_size >= 1; step_size /= 2)
@@ -444,24 +422,6 @@ void delauney_GPU(Point *owner_map_CPU, vector<Triangle> &triangles_list, int he
     // **************************************
     // (2) compute prefix sum of the number of triangles
     // **************************************
-    // Option 1: Get prefix sum in CPU side (TODO)
-    // **************************************
-    // int *triangle_prefix_sum_CPU = (int *)malloc(total_pixels * sizeof(int));
-    // checkCuda( cudaMemcpy(triangle_prefix_sum_CPU, triangle_count_GPU, total_pixels * sizeof(int), cudaMemcpyDeviceToHost) );
-    // checkCuda( cudaDeviceSynchronize() );
-    // for (int i = 1; i < total_pixels; i++)
-    // {
-    //     triangle_prefix_sum_CPU[i] = triangle_prefix_sum_CPU[i] + triangle_prefix_sum_CPU[i-1];
-    // }
-    // total_triangles = triangle_prefix_sum_CPU[total_pixels-1];
-    // checkCuda( cudaMalloc(&triangle_prefix_sum_GPU, total_pixels * sizeof(int)) );
-    // checkCuda( cudaMemcpy(triangle_prefix_sum_GPU, triangle_prefix_sum_CPU, total_pixels * sizeof(int), cudaMemcpyHostToDevice) );
-    // checkCuda( cudaDeviceSynchronize() );
-    // free(triangle_prefix_sum_CPU);
-
-    // **************************************
-    // Option 2: Using thrust library
-    // **************************************
     checkCuda( cudaMalloc(&triangle_prefix_sum_GPU, total_pixels * sizeof(int)) );
     thrust::inclusive_scan(thrust::device, triangle_count_GPU, triangle_count_GPU + total_pixels, triangle_prefix_sum_GPU);
     checkCuda( cudaMemcpy(&total_triangles, &triangle_prefix_sum_GPU[total_pixels-1], sizeof(int), cudaMemcpyDeviceToHost) );
@@ -483,21 +443,8 @@ void delauney_GPU(Point *owner_map_CPU, vector<Triangle> &triangles_list, int he
 
     std::cout << "total number of triangles processed: " << total_triangles << std::endl;
 
-    // ********************************
-    // for testing output result
-    // checkCuda( cudaMemcpy(owner_map_CPU, owner_map_GPU, sizeof(Point) * total_pixels, cudaMemcpyDeviceToHost) );
-    // Triangle *triangles_CPU = (Triangle *)malloc(sizeof(Triangle) * total_triangles);
-    // checkCuda( cudaMemcpy(triangles_CPU, triangles_GPU, sizeof(Triangle) * total_triangles, cudaMemcpyDeviceToHost) );
-    // for (int i = 0; i < total_triangles; i++)
-    //     triangles_list.push_back(triangles_CPU[i]);
-    // free(triangles_CPU);
-    // ********************************
 }
 
-
-// **************************************
-// This code checks if a point (pt) lies in a triangle (v1, v2, v3)
-// Reference: https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
 __device__ float sign(Point p1, Point p2, Point p3)
 {
     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
@@ -517,7 +464,6 @@ __device__ bool PointInTriangle(Point pt, Point v1, Point v2, Point v3)
 
     return !(has_neg && has_pos);
 }
-// **************************************
 
 
 __global__
